@@ -37,3 +37,6 @@ create_learningMaterial.py = script that expects as an input the path to an inpu
 learning.py = ...
 
 exam.py = ...
+
+# later on, future Features:
+Derive Input File from PDF. (Exam guide.)
