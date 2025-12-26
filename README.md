@@ -34,9 +34,26 @@ The Certification Exam Guides are the starting point:
 
 create_learningMaterial.py = script that expects as an input the path to an input (inside the input folder). It will Iterate through the task statements and use the prompt to generate answers. It will save the results as a json to the learning materials folder. 
 
-learning.py = ...
+learning.py = Gradio-based study app with Learning and Exam modes. Provides LLM-powered feedback on your answers.
 
-exam.py = ...
+## How to Run
+
+### Prerequisites
+1. Install dependencies:
+   ```bash
+   source .venv/bin/activate
+   pip install -r requirements.txt
+   ```
+
+2. Start LM Studio with the Nemotron model (`nvidia/llama-3.1-nemotron-nano-8b-v1`) on localhost:1234
+
+### Running the Study App
+```bash
+source .venv/bin/activate
+python learning.py LearningMaterials/clf-c02.json
+```
+Then open http://localhost:7860 in your browser.
 
 # later on, future Features:
-Derive Input File from PDF. (Exam guide.)
+* Derive Input File from PDF. (Exam guide.)
+* use llm api with browser capability to get the most up to date information on services ... 

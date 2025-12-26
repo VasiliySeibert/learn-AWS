@@ -1,0 +1,437 @@
+{
+  "source_file": "LearningMaterials/clf-c02.json",
+  "created_at": "2025-12-26T10:52:17.544962",
+  "badges": [
+    {
+      "id": "domain_1",
+      "name": "Domain 1",
+      "type": "domain",
+      "question_ids": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "domain_2",
+      "name": "Domain 2",
+      "type": "domain",
+      "question_ids": [
+        4,
+        5,
+        6,
+        7
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "domain_3",
+      "name": "Domain 3",
+      "type": "domain",
+      "question_ids": [
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "domain_4",
+      "name": "Domain 4",
+      "type": "domain",
+      "question_ids": [
+        16,
+        17,
+        18
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "technologies_1",
+      "name": "Technologies (Part 1)",
+      "type": "technology",
+      "question_ids": [
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "technologies_2",
+      "name": "Technologies (Part 2)",
+      "type": "technology",
+      "question_ids": [
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48,
+        49
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_analytics",
+      "name": "AWS Services: Analytics",
+      "type": "service",
+      "question_ids": [
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_application_integration",
+      "name": "AWS Services: Application Integration",
+      "type": "service",
+      "question_ids": [
+        57,
+        58,
+        59,
+        60
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_business_applications",
+      "name": "AWS Services: Business Applications",
+      "type": "service",
+      "question_ids": [
+        61,
+        62
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_cloud_financial_management",
+      "name": "AWS Services: Cloud Financial Management",
+      "type": "service",
+      "question_ids": [
+        63,
+        64,
+        65,
+        66
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_compute",
+      "name": "AWS Services: Compute",
+      "type": "service",
+      "question_ids": [
+        67,
+        68,
+        69,
+        70,
+        71
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_containers",
+      "name": "AWS Services: Containers",
+      "type": "service",
+      "question_ids": [
+        72,
+        73,
+        74,
+        75,
+        76
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_database",
+      "name": "AWS Services: Database",
+      "type": "service",
+      "question_ids": [
+        77,
+        78,
+        79,
+        80,
+        81,
+        82
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_developer_tools",
+      "name": "AWS Services: Developer Tools",
+      "type": "service",
+      "question_ids": [
+        83,
+        84,
+        85,
+        86
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_end_user_computing",
+      "name": "AWS Services: End User Computing",
+      "type": "service",
+      "question_ids": [
+        87,
+        88,
+        89
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_frontend_web_and_mobile",
+      "name": "AWS Services: Frontend Web and Mobile",
+      "type": "service",
+      "question_ids": [
+        90,
+        91
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_internet_of_things_(iot)",
+      "name": "AWS Services: Internet of Things (IoT)",
+      "type": "service",
+      "question_ids": [
+        92
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_machine_learning",
+      "name": "AWS Services: Machine Learning",
+      "type": "service",
+      "question_ids": [
+        93,
+        94,
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_management_and_governance",
+      "name": "AWS Services: Management and Governance",
+      "type": "service",
+      "question_ids": [
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114,
+        115,
+        116,
+        117,
+        118
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_migration_and_transfer",
+      "name": "AWS Services: Migration and Transfer",
+      "type": "service",
+      "question_ids": [
+        119,
+        120,
+        121,
+        122,
+        123,
+        124,
+        125
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_networking_and_content_delivery",
+      "name": "AWS Services: Networking and Content Delivery",
+      "type": "service",
+      "question_ids": [
+        126,
+        127,
+        128,
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_security,_identity,_and_compliance",
+      "name": "AWS Services: Security, Identity, and Compliance",
+      "type": "service",
+      "question_ids": [
+        138,
+        139,
+        140,
+        141,
+        142,
+        143,
+        144,
+        145,
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_serverless",
+      "name": "AWS Services: Serverless",
+      "type": "service",
+      "question_ids": [
+        157,
+        158
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    },
+    {
+      "id": "services_storage",
+      "name": "AWS Services: Storage",
+      "type": "service",
+      "question_ids": [
+        159,
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166
+      ],
+      "review_count": 0,
+      "last_reviewed": null,
+      "exam_scores": [],
+      "best_score_percentage": null
+    }
+  ]
+}
