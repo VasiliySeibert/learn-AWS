@@ -82,6 +82,13 @@ def load_learning_materials(path: str) -> dict:
         return json.load(f)
 
 
+def get_available_learning_files(folder: str = "LearningMaterials") -> list[str]:
+    """Get list of JSON files in the LearningMaterials folder."""
+    if not os.path.exists(folder):
+        return []
+    return sorted([f for f in os.listdir(folder) if f.endswith('.json')])
+
+
 def build_question_pool(data: dict) -> list[dict]:
     """
     Build a flat list of questions from the learning materials.
@@ -372,6 +379,71 @@ def format_badge_display(badge: dict) -> str:
             pass
 
     return " | ".join(parts)
+
+
+def format_days_ago(iso_timestamp: str) -> str:
+    """Format an ISO timestamp as 'Today', 'Yesterday', or 'X days ago'."""
+    try:
+        last = datetime.fromisoformat(iso_timestamp)
+        days_ago = (datetime.now() - last).days
+        if days_ago == 0:
+            return "Today"
+        elif days_ago == 1:
+            return "Yesterday"
+        else:
+            return f"{days_ago}d ago"
+    except:
+        return "-"
+
+
+def generate_progress_dashboard(session_data: dict) -> str:
+    """Generate markdown dashboard showing overall progress across all badges."""
+    badges = session_data.get("badges", [])
+    if not badges:
+        return "No badges available."
+
+    # Calculate summary stats
+    total = len(badges)
+    completed = sum(1 for b in badges if b["review_count"] > 0)
+    with_scores = [b for b in badges if b["best_score_percentage"] is not None]
+    avg_score = (sum(b["best_score_percentage"] for b in with_scores)
+                 / len(with_scores)) if with_scores else 0
+    total_questions = sum(len(b["question_ids"]) for b in badges)
+
+    # Build markdown
+    dashboard = "### Overview\n"
+    dashboard += f"**Completed:** {completed}/{total} badges | "
+    dashboard += f"**Questions:** {total_questions} | "
+    if with_scores:
+        dashboard += f"**Avg Best Score:** {round(avg_score, 1)}%\n\n"
+    else:
+        dashboard += "**Avg Best Score:** -\n\n"
+
+    # Badge table
+    dashboard += "| Badge | Qs | Reviews | Best | Last Reviewed |\n"
+    dashboard += "|-------|----:|--------:|-----:|---------------|\n"
+
+    for b in badges:
+        name = b["name"]
+        if len(name) > 25:
+            name = name[:22] + "..."
+        q_count = len(b["question_ids"])
+        reviews = b["review_count"]
+        best = f"{b['best_score_percentage']}%" if b["best_score_percentage"] is not None else "-"
+        last = format_days_ago(b["last_reviewed"]) if b["last_reviewed"] else "-"
+
+        # Status indicator
+        if reviews == 0:
+            status = ""
+        elif b["best_score_percentage"] and b["best_score_percentage"] >= 80:
+            status = " *"
+        else:
+            status = ""
+
+        dashboard += f"| {name}{status} | {q_count} | {reviews} | {best} | {last} |\n"
+
+    dashboard += "\n_* = Best score 80%+_"
+    return dashboard
 
 
 def get_badge_questions(badge: dict, all_questions: list[dict]) -> list[dict]:
@@ -679,18 +751,35 @@ def save_results(session: StudySession, output_dir: str = "ExamMode") -> str:
 # Gradio UI
 # =============================================================================
 
-def create_app(data_path: str):
-    """Create and return the Gradio app."""
+def create_app(data_path: str | None = None):
+    """Create and return the Gradio app.
 
-    # Load data
-    data = load_learning_materials(data_path)
-    all_questions = build_question_pool(data)
+    Args:
+        data_path: Path to learning materials JSON. If None, shows file selection UI.
+    """
 
-    if not all_questions:
-        raise ValueError("No questions found in the learning materials. Make sure the JSON has learning-material fields.")
+    # Mutable state holder for dynamic loading
+    app_state = {
+        "data_path": data_path,
+        "data": None,
+        "all_questions": [],
+        "session_data": {"badges": []},
+        "session_path": None,
+    }
 
-    # Load or create session file with badges
-    session_data, session_path = load_or_create_session(data_path, all_questions)
+    # Load data if path provided (backwards compatible mode)
+    if data_path:
+        app_state["data"] = load_learning_materials(data_path)
+        app_state["all_questions"] = build_question_pool(app_state["data"])
+        if not app_state["all_questions"]:
+            raise ValueError("No questions found in the learning materials.")
+        app_state["session_data"], app_state["session_path"] = \
+            load_or_create_session(data_path, app_state["all_questions"])
+
+    # Aliases for easier access in nested functions
+    session_data = app_state["session_data"]
+    session_path = app_state["session_path"]
+    all_questions = app_state["all_questions"]
 
     def get_badge_choices():
         """Get formatted badge choices for dropdown."""
@@ -792,8 +881,10 @@ def create_app(data_path: str):
 
         # Get feedback text based on mode
         if session.mode == "learning":
-            feedback = get_feedback(q["question"], answer, q["learning_material"])
-            feedback_text = f"**Answer recorded.**\n\n{feedback}"
+            # Use structured analysis instead of vague encouragement
+            feedback_text = "**Answer recorded.**\n\n"
+            feedback_text += format_analysis_display(analysis)
+            feedback = ""
         else:  # exam mode
             feedback = ""
             feedback_text = "**Answer recorded.** (You'll grade all answers at the end)"
@@ -902,7 +993,7 @@ def create_app(data_path: str):
         }
 
     def enter_grading_phase(session: StudySession):
-        """Transition from answering to grading phase."""
+        """Transition from answering to grading phase. Returns 16 values for next_btn.click()."""
         session.phase = "grading"
         session.grading_index = 0
 
@@ -913,15 +1004,22 @@ def create_app(data_path: str):
 
         return (
             session,
+            "",  # progress_text (question section - not used in grading)
+            "",  # question_display
+            "",  # answer_input
+            "",  # feedback_display
+            gr.update(visible=False),  # question_section
+            gr.update(visible=True),   # grading_section
+            gr.update(visible=False),  # summary_section
+            gr.update(visible=False),  # next_btn
+            "",  # summary_display
+            # Grading section outputs (positions 10-15)
             grading_data["progress"],
             grading_data["question"],
             grading_data["user_answer"],
             grading_data["analysis"],
             grading_data["reference"],
             grading_data["score"],
-            gr.update(visible=False),  # question_section
-            gr.update(visible=True),   # grading_section
-            gr.update(visible=False),  # summary_section
         )
 
     def handle_grade_submit(session: StudySession, score: int):
@@ -936,7 +1034,7 @@ def create_app(data_path: str):
 
         # Check if all answers have been graded
         if session.grading_index >= len(session.answers):
-            return finish_grading(session)
+            return finish_grading_for_grade_submit(session)
 
         # Load next answer for grading
         grading_data = load_grading_item(session)
@@ -972,8 +1070,8 @@ def create_app(data_path: str):
             grading_data["score"],
         )
 
-    def finish_grading(session: StudySession):
-        """Complete grading phase, update badge metadata, and show summary."""
+    def finish_grading_for_grade_submit(session: StudySession):
+        """Complete grading phase for grade_submit_btn context. Returns 11 values."""
         # Update badge metadata
         if session.current_badge and session.session_data and session.session_path:
             update_badge_metadata(
@@ -999,6 +1097,41 @@ def create_app(data_path: str):
             gr.update(visible=False),  # grading_section
             gr.update(visible=True),   # summary_section
             summary,  # summary_display
+        )
+
+    def finish_grading(session: StudySession):
+        """Complete grading phase, update badge metadata, and show summary. Returns 16 values for next_btn.click()."""
+        # Update badge metadata
+        if session.current_badge and session.session_data and session.session_path:
+            update_badge_metadata(
+                session.session_data,
+                session.current_badge["id"],
+                session.mode,
+                session.total_score(),
+                session.max_score()
+            )
+            save_session(session.session_data, session.session_path)
+
+        # Generate and show summary
+        summary = generate_summary(session)
+        return (
+            session,
+            "",  # progress_text (question section - not used)
+            "",  # question_display
+            "",  # answer_input
+            "",  # feedback_display
+            gr.update(visible=False),  # question_section
+            gr.update(visible=False),  # grading_section
+            gr.update(visible=True),   # summary_section
+            gr.update(visible=False),  # next_btn
+            summary,  # summary_display
+            # Grading section outputs (cleared)
+            "",  # grading_progress
+            "",  # grading_question
+            "",  # grading_user_answer
+            "",  # grading_analysis
+            "",  # grading_reference
+            0,   # score_slider
         )
 
     def generate_summary(session: StudySession) -> str:
@@ -1053,12 +1186,14 @@ def create_app(data_path: str):
         return f"Results saved to: `{filepath}`"
 
     def return_to_badge_selector(session: StudySession):
-        """Return to badge selector, refreshing badge info."""
+        """Return to badge selector, refreshing badge info and progress dashboard."""
         # Reload session data to get updated metadata
         nonlocal session_data
-        if os.path.exists(session_path):
-            with open(session_path, "r", encoding="utf-8") as f:
-                session_data = json.load(f)
+        current_session_path = app_state["session_path"]
+        if current_session_path and os.path.exists(current_session_path):
+            with open(current_session_path, "r", encoding="utf-8") as f:
+                app_state["session_data"] = json.load(f)
+                session_data = app_state["session_data"]
 
         return (
             None,  # session_state
@@ -1073,6 +1208,7 @@ def create_app(data_path: str):
             gr.update(visible=False),  # summary_section
             gr.update(choices=get_badge_choices(), value=None),  # badge_dropdown
             "",    # badge_info
+            generate_progress_dashboard(app_state["session_data"]),  # progress_dashboard
         )
 
     def get_next_badge_id(current_badge_id: str) -> str | None:
@@ -1094,15 +1230,98 @@ def create_app(data_path: str):
         return start_badge_session(mode, randomize, next_badge_id)
 
     # Build UI
+    # File loading callback for dynamic file selection
+    def load_selected_file(file_choice: str):
+        """Load a learning materials file and update app state."""
+        nonlocal session_data, session_path, all_questions
+
+        if not file_choice:
+            return (
+                gr.update(visible=True),   # file_selector_section stays visible
+                gr.update(visible=False),  # badge_selector_section stays hidden
+                "",                         # file_status
+                gr.update(choices=[], value=None),  # badge_dropdown
+                "",                         # badge_info
+                "",                         # progress_dashboard
+            )
+
+        full_path = os.path.join("LearningMaterials", file_choice)
+        try:
+            app_state["data_path"] = full_path
+            app_state["data"] = load_learning_materials(full_path)
+            app_state["all_questions"] = build_question_pool(app_state["data"])
+
+            if not app_state["all_questions"]:
+                return (
+                    gr.update(visible=True),
+                    gr.update(visible=False),
+                    f"Error: No questions found in {file_choice}",
+                    gr.update(choices=[], value=None),
+                    "",
+                    "",
+                )
+
+            app_state["session_data"], app_state["session_path"] = \
+                load_or_create_session(full_path, app_state["all_questions"])
+
+            # Update the aliases for nested functions
+            session_data = app_state["session_data"]
+            session_path = app_state["session_path"]
+            all_questions = app_state["all_questions"]
+
+            return (
+                gr.update(visible=False),  # hide file_selector_section
+                gr.update(visible=True),   # show badge_selector_section
+                f"Loaded {len(all_questions)} questions from {file_choice}",
+                gr.update(choices=get_badge_choices(), value=None),
+                "",
+                generate_progress_dashboard(session_data),
+            )
+        except Exception as e:
+            return (
+                gr.update(visible=True),
+                gr.update(visible=False),
+                f"Error loading file: {e}",
+                gr.update(choices=[], value=None),
+                "",
+                "",
+            )
+
+    # Determine initial visibility based on whether data_path was provided
+    file_loaded = data_path is not None
+
     with gr.Blocks(title="AWS Study Tool") as app:
         gr.Markdown("# AWS Study Tool")
-        gr.Markdown(f"Loaded **{len(all_questions)}** questions in **{len(session_data['badges'])}** badges from `{data_path}`")
 
         session_state = gr.State(None)
 
-        # Badge Selector Section
-        with gr.Column(visible=True) as badge_selector_section:
+        # File Selection Section (shown when no file loaded via CLI)
+        with gr.Column(visible=not file_loaded) as file_selector_section:
+            gr.Markdown("## Select Learning Materials")
+            available_files = get_available_learning_files()
+            if available_files:
+                file_dropdown = gr.Dropdown(
+                    choices=available_files,
+                    label="Choose a file from LearningMaterials/",
+                    value=None
+                )
+                load_file_btn = gr.Button("Load File", variant="primary")
+            else:
+                gr.Markdown("_No JSON files found in LearningMaterials/ folder._")
+                file_dropdown = gr.Dropdown(choices=[], visible=False)
+                load_file_btn = gr.Button("Load File", visible=False)
+            file_status = gr.Markdown("")
+
+        # Badge Selector Section (shown when file is loaded)
+        with gr.Column(visible=file_loaded) as badge_selector_section:
             gr.Markdown("## Select a Badge")
+
+            # Progress Dashboard
+            with gr.Accordion("Progress Dashboard", open=True):
+                progress_dashboard = gr.Markdown(
+                    generate_progress_dashboard(session_data) if file_loaded else ""
+                )
+
             badge_dropdown = gr.Dropdown(
                 choices=get_badge_choices(),
                 label="Choose Badge",
@@ -1133,7 +1352,7 @@ def create_app(data_path: str):
             with gr.Row():
                 submit_btn = gr.Button("Submit Answer", variant="primary")
                 peek_btn = gr.Button("Peek 👀")
-                skip_btn = gr.Button("Skip →")
+                skip_btn = gr.Button("Skip (0 pts)")
                 next_btn = gr.Button("Next Question →", visible=False, variant="secondary")
 
             feedback_display = gr.Markdown("")
@@ -1172,6 +1391,16 @@ def create_app(data_path: str):
 
         # Wire up events
 
+        # File selection -> load file and show badge selector
+        load_file_btn.click(
+            load_selected_file,
+            inputs=[file_dropdown],
+            outputs=[
+                file_selector_section, badge_selector_section, file_status,
+                badge_dropdown, badge_info, progress_dashboard
+            ]
+        )
+
         # Badge dropdown change -> show badge info
         badge_dropdown.change(
             show_badge_info,
@@ -1192,6 +1421,9 @@ def create_app(data_path: str):
         )
 
         submit_btn.click(
+            lambda: gr.update(value="Analyzing...", interactive=False),
+            outputs=[submit_btn]
+        ).then(
             submit_answer,
             inputs=[session_state, answer_input],
             outputs=[session_state, feedback_display, submit_btn, next_btn]
@@ -1209,7 +1441,7 @@ def create_app(data_path: str):
                 grading_analysis, grading_reference, score_slider
             ]
         ).then(
-            lambda s: gr.update(visible=True) if s and s.phase == "answering" and not s.is_complete() else gr.update(visible=False),
+            lambda s: gr.update(visible=True, value="Submit Answer", interactive=True) if s and s.phase == "answering" and not s.is_complete() else gr.update(visible=False),
             inputs=[session_state],
             outputs=[submit_btn]
         )
@@ -1231,6 +1463,10 @@ def create_app(data_path: str):
                 grading_progress, grading_question, grading_user_answer,
                 grading_analysis, grading_reference, score_slider
             ]
+        ).then(
+            lambda s: gr.update(visible=True, value="Submit Answer", interactive=True) if s and s.phase == "answering" and not s.is_complete() else gr.update(visible=False),
+            inputs=[session_state],
+            outputs=[submit_btn]
         )
 
         save_btn.click(
@@ -1282,7 +1518,7 @@ def create_app(data_path: str):
                 session_state, progress_text, question_display,
                 answer_input, feedback_display, peek_display,
                 badge_selector_section, question_section, grading_section, summary_section,
-                badge_dropdown, badge_info
+                badge_dropdown, badge_info, progress_dashboard
             ]
         )
 
@@ -1295,16 +1531,21 @@ def create_app(data_path: str):
 
 def main():
     parser = argparse.ArgumentParser(description="AWS Study Tool - Gradio App")
-    parser.add_argument("data_path", help="Path to learning materials JSON file")
+    parser.add_argument("data_path", nargs='?', default=None,
+                        help="Path to learning materials JSON file (optional - can select in UI)")
     parser.add_argument("--port", type=int, default=7860, help="Port to run on")
     parser.add_argument("--share", action="store_true", help="Create public link")
     args = parser.parse_args()
 
-    if not os.path.exists(args.data_path):
+    if args.data_path and not os.path.exists(args.data_path):
         print(f"Error: File not found: {args.data_path}")
         return
 
-    print(f"Loading learning materials from: {args.data_path}")
+    if args.data_path:
+        print(f"Loading learning materials from: {args.data_path}")
+    else:
+        print("Starting in file selection mode...")
+
     app = create_app(args.data_path)
     print(f"Starting server on http://localhost:{args.port}")
     app.launch(server_port=args.port, share=args.share, theme=gr.themes.Soft())
