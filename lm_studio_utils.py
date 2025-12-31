@@ -13,7 +13,30 @@ from platform_utils import get_lm_studio_url
 LM_STUDIO_BASE_URL = get_lm_studio_url()
 
 # Model identifier for nvidia nemotron-3-nano (reasoning model)
-NEMOTRON_MODEL = "nvidia/llama-3.1-nemotron-nano-8b-v1"
+# Can be overridden with LM_STUDIO_MODEL environment variable
+import os
+NEMOTRON_MODEL = os.getenv("LM_STUDIO_MODEL", "nvidia/llama-3.1-nemotron-nano-8b-v1")
+
+
+def get_available_models() -> list[str]:
+    """
+    Fetch the list of available models from LM Studio.
+
+    Returns:
+        List of model IDs available in LM Studio
+    """
+    try:
+        import requests
+        response = requests.get(f"{LM_STUDIO_BASE_URL}/models", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return [model["id"] for model in data.get("data", [])]
+        else:
+            print(f"Failed to fetch models from LM Studio: {response.status_code}")
+            return [NEMOTRON_MODEL]  # Return default if fetch fails
+    except Exception as e:
+        print(f"Error fetching models from LM Studio: {e}")
+        return [NEMOTRON_MODEL]  # Return default if connection fails
 
 
 def _strip_reasoning(response: str) -> str:
@@ -34,7 +57,7 @@ def _strip_reasoning(response: str) -> str:
     return stripped.strip()
 
 
-def prompt_nemotron(prompt: str, system_message: str = None, include_reasoning: bool = False) -> str:
+def prompt_nemotron(prompt: str, system_message: str = None, include_reasoning: bool = False, model: str = None) -> str:
     """
     Send a prompt to the nvidia/nemotron-3-nano model via LM Studio.
 
@@ -43,6 +66,7 @@ def prompt_nemotron(prompt: str, system_message: str = None, include_reasoning: 
         system_message: Optional system message to set context
         include_reasoning: If True, include the <think>...</think> reasoning in the response.
                           If False (default), strip the reasoning and return only the answer.
+        model: Optional model identifier. If None, uses NEMOTRON_MODEL default.
 
     Returns:
         The LLM's response as a string
@@ -58,7 +82,7 @@ def prompt_nemotron(prompt: str, system_message: str = None, include_reasoning: 
     messages.append({"role": "user", "content": prompt})
 
     response = client.chat.completions.create(
-        model=NEMOTRON_MODEL,
+        model=model or NEMOTRON_MODEL,
         messages=messages,
         temperature=0.7
     )
