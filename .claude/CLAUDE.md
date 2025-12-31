@@ -159,11 +159,24 @@ pip install -r requirements.txt
 
 ### 2. LM Studio
 
+⚠️ **IMPORTANT:** LM Studio must be manually started before running the application!
+
 LM Studio must be running locally for LLM-powered feedback:
 - Download from: https://lmstudio.ai/
 - Model: `nvidia/llama-3.1-nemotron-nano-8b-v1`
-- Server: `http://localhost:1234`
-- Start the local server before running learning.py
+- Server: `http://localhost:1234` (or your Windows IP on WSL)
+
+**Steps to start:**
+1. Open LM Studio application
+2. Load the Nemotron model
+3. Go to "Local Server" or "Developer" tab
+4. Click "Start Server"
+5. Verify server is running before launching learning.py
+
+**On WSL2:**
+- LM Studio runs as Windows application (not in WSL)
+- Must be configured to listen on `0.0.0.0:1234` (not just `127.0.0.1`)
+- Application will connect via Windows host IP
 
 ### 3. Dependencies (requirements.txt)
 
@@ -172,3 +185,151 @@ Core dependencies:
 - `openai` - LM Studio API client (OpenAI-compatible)
 - `requests` - HTTP requests
 - `tqdm` - Progress bars (for create_learningMaterial.py)
+
+## Cross-Platform Networking
+
+The application automatically detects the environment and configures networking appropriately.
+
+### Automatic Environment Detection
+
+The `platform_utils.py` module detects whether the application is running in:
+- **WSL2** (Windows Subsystem for Linux)
+- **macOS** (native)
+- **Linux** (native)
+
+### WSL2 Configuration
+
+When running in WSL2:
+- **Gradio UI**: Binds to `0.0.0.0`, making it accessible from Windows browser at `http://localhost:7860`
+- **LM Studio**: Connects to Windows host at `http://{windows_host_ip}:1234/v1`
+  - Windows host IP is automatically detected from `/etc/resolv.conf` (typically `10.255.255.254`)
+- **Detection**: Automatic via `/proc/version` check
+
+**Requirements:**
+- Run LM Studio as a native Windows application (not inside WSL)
+- Access the Gradio UI from Windows browser
+- No manual configuration needed
+
+### macOS/Linux Configuration
+
+When running on macOS or native Linux:
+- **Gradio UI**: Binds to `127.0.0.1` (localhost only)
+- **LM Studio**: Connects to `http://localhost:1234/v1`
+- **Detection**: Automatic
+- **Behavior**: Unchanged from previous version
+
+### Manual Configuration Overrides
+
+You can override the automatic detection using environment variables or CLI arguments:
+
+#### Environment Variables
+
+```bash
+# Force specific LM Studio URL
+export LM_STUDIO_URL="http://192.168.1.100:1234/v1"
+
+# Force specific Gradio binding
+export GRADIO_SERVER_NAME="0.0.0.0"
+
+# Enable debug output for networking decisions
+export DEBUG_NETWORKING="1"
+
+# Then run the application
+python learning.py LearningMaterials/clf-c02.json
+```
+
+#### Command Line Arguments
+
+```bash
+# Override Gradio server binding
+python learning.py LearningMaterials/clf-c02.json --server-name 0.0.0.0
+
+# Combine with other options
+python learning.py LearningMaterials/clf-c02.json --port 8080 --server-name 0.0.0.0
+```
+
+### Troubleshooting
+
+#### WSL: Cannot access Gradio UI from Windows browser
+
+1. **Check Windows host IP detection:**
+   ```bash
+   cat /etc/resolv.conf
+   # Look for the nameserver IP
+   ```
+
+2. **Verify Gradio binding:**
+   ```bash
+   python learning.py LearningMaterials/clf-c02.json
+   # Look for: "Binding Gradio to: 0.0.0.0:7860"
+   ```
+
+3. **Test platform detection:**
+   ```bash
+   python3 platform_utils.py
+   # Should show WSL: True and Windows Host IP
+   ```
+
+4. **Manual override if needed:**
+   ```bash
+   export GRADIO_SERVER_NAME="0.0.0.0"
+   python learning.py LearningMaterials/clf-c02.json
+   ```
+
+#### WSL: LM Studio connection fails
+
+1. **Verify LM Studio is running on Windows:**
+   - Open LM Studio on Windows (not in WSL)
+   - Start the local server
+   - Check it's listening on port 1234
+
+2. **Check Windows host IP:**
+   ```bash
+   cat /etc/resolv.conf | grep nameserver
+   # Note the IP address
+   ```
+
+3. **Test platform detection:**
+   ```bash
+   python3 platform_utils.py
+   # Verify LM Studio URL uses Windows host IP
+   ```
+
+4. **Manual override if automatic detection fails:**
+   ```bash
+   # Replace with your Windows host IP
+   export LM_STUDIO_URL="http://10.255.255.254:1234/v1"
+   python learning.py LearningMaterials/clf-c02.json
+   ```
+
+5. **Check Windows Firewall:**
+   - Windows Firewall might block WSL connections
+   - Allow incoming connections on port 1234 for LM Studio
+
+#### Debug Mode
+
+Enable detailed networking logs:
+
+```bash
+export DEBUG_NETWORKING="1"
+python learning.py LearningMaterials/clf-c02.json
+```
+
+This will print:
+- Detected platform (WSL/macOS/Linux)
+- Windows host IP (if WSL)
+- LM Studio URL being used
+- Gradio server_name being used
+
+### Technical Details
+
+**WSL2 Networking:**
+- WSL2 uses a virtualized network adapter
+- Windows host is accessible via the nameserver IP in `/etc/resolv.conf`
+- Services in WSL binding to `127.0.0.1` are not accessible from Windows
+- Services binding to `0.0.0.0` are accessible from Windows via `localhost`
+
+**Platform Detection Method:**
+- Check `/proc/version` for "microsoft" string
+- Parse nameserver IP from `/etc/resolv.conf`
+- Graceful fallback to localhost if detection fails

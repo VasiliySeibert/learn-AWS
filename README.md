@@ -39,20 +39,65 @@ learning.py = Gradio-based study app with Learning and Exam modes. Provides LLM-
 ## How to Run
 
 ### Prerequisites
-1. Install dependencies:
+
+1. **Install dependencies:**
    ```bash
    source .venv/bin/activate
    pip install -r requirements.txt
    ```
 
-2. Start LM Studio with the Nemotron model (`nvidia/llama-3.1-nemotron-nano-8b-v1`) on localhost:1234
+2. **Start LM Studio (REQUIRED):**
+
+   ⚠️ **Important:** You must manually start LM Studio before running the application!
+
+   - **macOS/Linux**: Run LM Studio locally on your machine
+   - **WSL2**: Run LM Studio as a Windows application (not inside WSL)
+     - Open LM Studio on Windows
+     - Load model: `nvidia/llama-3.1-nemotron-nano-8b-v1`
+     - Go to "Local Server" or "Developer" tab
+     - Click "Start Server" (make sure it's listening on `0.0.0.0:1234`)
+     - The application will connect to Windows host automatically
 
 ### Running the Study App
+
+**Quick start (recommended):**
+```bash
+./run.sh
+```
+
+**Manual start:**
 ```bash
 source .venv/bin/activate
 python learning.py LearningMaterials/clf-c02.json
 ```
-Then open http://localhost:7860 in your browser.
+
+**Note for WSL users:** If LM Studio connection fails, you may need to set the LM Studio URL:
+```bash
+export LM_STUDIO_URL="http://YOUR_WINDOWS_IP:1234/v1"
+python learning.py LearningMaterials/clf-c02.json
+```
+To find your Windows IP, run `ipconfig` in Windows Command Prompt and look for the IPv4 address.
+
+**Access the application:**
+- **macOS/Linux**: Open `http://localhost:7860` in your local browser
+- **WSL2**: Open `http://localhost:7860` in your Windows browser
+  - The application automatically configures networking for WSL2
+  - No manual configuration needed
+
+**Expected output:**
+```
+Loading learning materials from: LearningMaterials/clf-c02.json
+Starting server on http://localhost:7860
+Binding Gradio to: 0.0.0.0:7860    # On WSL2
+Binding Gradio to: 127.0.0.1:7860  # On macOS/Linux
+```
+
+### Cross-Platform Notes
+
+The application automatically detects your environment (WSL2, macOS, Linux) and configures networking appropriately. See `.claude/CLAUDE.md` for detailed information about:
+- Automatic platform detection
+- Manual configuration overrides
+- Troubleshooting connection issues
 
 # later on, future Features:
 * Derive Input File from PDF. (Exam guide.)

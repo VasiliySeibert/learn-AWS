@@ -6,9 +6,11 @@ This .py script contains the utils functions to use the local lm studio server f
 
 import re
 from openai import OpenAI
+from platform_utils import get_lm_studio_url
 
-# LM Studio runs an OpenAI-compatible server on localhost:1234
-LM_STUDIO_BASE_URL = "http://localhost:1234/v1"
+# LM Studio runs an OpenAI-compatible server
+# URL is automatically configured based on environment (WSL vs macOS)
+LM_STUDIO_BASE_URL = get_lm_studio_url()
 
 # Model identifier for nvidia nemotron-3-nano (reasoning model)
 NEMOTRON_MODEL = "nvidia/llama-3.1-nemotron-nano-8b-v1"

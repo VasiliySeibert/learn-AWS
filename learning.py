@@ -70,6 +70,7 @@ from datetime import datetime
 from dataclasses import dataclass, field
 import gradio as gr
 from lm_studio_utils import prompt_nemotron
+from platform_utils import get_gradio_server_name
 
 
 # =============================================================================
@@ -1535,6 +1536,8 @@ def main():
                         help="Path to learning materials JSON file (optional - can select in UI)")
     parser.add_argument("--port", type=int, default=7860, help="Port to run on")
     parser.add_argument("--share", action="store_true", help="Create public link")
+    parser.add_argument("--server-name", type=str, default=None,
+                        help="Server name/IP to bind to (default: auto-detect)")
     args = parser.parse_args()
 
     if args.data_path and not os.path.exists(args.data_path):
@@ -1547,8 +1550,15 @@ def main():
         print("Starting in file selection mode...")
 
     app = create_app(args.data_path)
+    server_name = args.server_name or get_gradio_server_name()
     print(f"Starting server on http://localhost:{args.port}")
-    app.launch(server_port=args.port, share=args.share, theme=gr.themes.Soft())
+    print(f"Binding Gradio to: {server_name}:{args.port}")
+    app.launch(
+        server_name=server_name,
+        server_port=args.port,
+        share=args.share,
+        theme=gr.themes.Soft()
+    )
 
 
 if __name__ == "__main__":
