@@ -69,7 +69,7 @@ import random
 from datetime import datetime
 from dataclasses import dataclass, field
 import gradio as gr
-from lm_studio_utils import prompt_nemotron
+from lm_studio_utils import prompt_nemotron, get_available_models
 from platform_utils import get_gradio_server_name
 
 
@@ -125,8 +125,7 @@ def build_question_pool(data: dict) -> list[dict]:
             })
             question_id += 1
 
-    # Process AWS Services - track current category for grouping
-    # Known category headers in AWS services list (from AWS documentation)
+    # Process AWS Services - filter out category headers and PDF artifacts
     known_categories = {
         "Analytics", "Application Integration", "Business Applications",
         "Cloud Financial Management", "Compute", "Containers",
@@ -137,26 +136,22 @@ def build_question_pool(data: dict) -> list[dict]:
         "Networking and Content Delivery", "Security, Identity, and Compliance",
         "Serverless", "Storage"
     }
-    # Artifacts from PDF parsing that should be skipped entirely
     skip_entries = {
         "In-Scope AWS Services", "AWS Certification Exam Guides"
     }
-    current_service_category = "General"
     for service in data.get("AWS-Services", []):
         if isinstance(service, dict):
             service_name = service.get("aws-service", "")
-            # Skip PDF artifacts
+            # Skip PDF artifacts and category headers
             if any(service_name.startswith(skip) for skip in skip_entries):
                 continue
-            # Detect category headers by known names only
             if service_name in known_categories:
-                current_service_category = service_name
                 continue
             questions.append({
                 "question_id": question_id,
                 "type": "service",
                 "category": "AWS Services",
-                "subcategory": current_service_category,
+                "subcategory": None,
                 "question": f"Explain the following AWS service: {service_name}",
                 "learning_material": service["learning-material"]
             })
@@ -198,7 +193,7 @@ def generate_badge_definitions(questions: list[dict]) -> list[dict]:
     # Group questions by type and category
     domains = {}
     technologies = []
-    services_by_category = {}
+    services = []
 
     for q in questions:
         if q["type"] == "domain":
@@ -209,10 +204,7 @@ def generate_badge_definitions(questions: list[dict]) -> list[dict]:
         elif q["type"] == "technology":
             technologies.append(q["question_id"])
         elif q["type"] == "service":
-            subcat = q["subcategory"] or "General"
-            if subcat not in services_by_category:
-                services_by_category[subcat] = []
-            services_by_category[subcat].append(q["question_id"])
+            services.append(q["question_id"])
 
     # Create Domain badges
     for domain_name, question_ids in domains.items():
@@ -252,14 +244,24 @@ def generate_badge_definitions(questions: list[dict]) -> list[dict]:
             "best_score_percentage": None
         })
 
-    # Create AWS Services badges by category
-    for category, question_ids in services_by_category.items():
-        badge_id = f"services_{category.lower().replace(' ', '_').replace('-', '_')}"
+    # Create AWS Services badges (split in half like Technologies)
+    if services:
+        mid = len(services) // 2
         badges.append({
-            "id": badge_id,
-            "name": f"AWS Services: {category}",
+            "id": "services_1",
+            "name": "AWS Services (Part 1)",
             "type": "service",
-            "question_ids": question_ids,
+            "question_ids": services[:mid],
+            "review_count": 0,
+            "last_reviewed": None,
+            "exam_scores": [],
+            "best_score_percentage": None
+        })
+        badges.append({
+            "id": "services_2",
+            "name": "AWS Services (Part 2)",
+            "type": "service",
+            "question_ids": services[mid:],
             "review_count": 0,
             "last_reviewed": None,
             "exam_scores": [],
@@ -328,26 +330,58 @@ def update_badge_metadata(session_data: dict, badge_id: str,
                           mode: str, score: int = None, max_score: int = None) -> dict:
     """
     Update badge metadata after completion.
-    - Increment review_count
+    - Increment mode-specific count (learning_count or exam_count)
     - Update last_reviewed timestamp
-    - Append exam score (if exam mode)
+    - Append score to appropriate array (learning_scores or exam_scores)
+    - Calculate averages and best scores
     """
     for badge in session_data["badges"]:
         if badge["id"] == badge_id:
-            badge["review_count"] += 1
+            # Initialize new fields if missing (backward compatibility)
+            if "learning_count" not in badge:
+                badge["learning_count"] = 0
+            if "exam_count" not in badge:
+                badge["exam_count"] = 0
+            if "learning_scores" not in badge:
+                badge["learning_scores"] = []
+
+            # Update timestamp
             badge["last_reviewed"] = datetime.now().isoformat()
 
-            if mode == "exam" and score is not None and max_score is not None:
-                percentage = round((score / max_score) * 100, 1) if max_score > 0 else 0
-                badge["exam_scores"].append({
-                    "date": datetime.now().isoformat(),
-                    "score": score,
-                    "max_score": max_score,
-                    "percentage": percentage
-                })
-                # Update best score
-                if badge["best_score_percentage"] is None or percentage > badge["best_score_percentage"]:
-                    badge["best_score_percentage"] = percentage
+            # Calculate percentage
+            percentage = round((score / max_score) * 100, 1) if (score is not None and max_score and max_score > 0) else 0
+
+            if mode == "learning":
+                # Update learning-specific fields
+                badge["learning_count"] += 1
+                if score is not None and max_score is not None:
+                    badge["learning_scores"].append({
+                        "date": datetime.now().isoformat(),
+                        "score": score,
+                        "max_score": max_score,
+                        "percentage": percentage
+                    })
+                    # Calculate average learning percentage
+                    if badge["learning_scores"]:
+                        all_percentages = [s["percentage"] for s in badge["learning_scores"]]
+                        badge["avg_learning_percentage"] = round(sum(all_percentages) / len(all_percentages), 1)
+
+            elif mode == "exam":
+                # Update exam-specific fields
+                badge["exam_count"] += 1
+                if score is not None and max_score is not None:
+                    badge["exam_scores"].append({
+                        "date": datetime.now().isoformat(),
+                        "score": score,
+                        "max_score": max_score,
+                        "percentage": percentage
+                    })
+                    # Update best exam score
+                    if badge["best_score_percentage"] is None or percentage > badge["best_score_percentage"]:
+                        badge["best_score_percentage"] = percentage
+
+            # Maintain review_count for backward compatibility (sum of both)
+            badge["review_count"] = badge["learning_count"] + badge["exam_count"]
             break
 
     return session_data
@@ -403,47 +437,62 @@ def generate_progress_dashboard(session_data: dict) -> str:
     if not badges:
         return "No badges available."
 
-    # Calculate summary stats
+    # Calculate summary stats with mode separation
     total = len(badges)
-    completed = sum(1 for b in badges if b["review_count"] > 0)
-    with_scores = [b for b in badges if b["best_score_percentage"] is not None]
-    avg_score = (sum(b["best_score_percentage"] for b in with_scores)
-                 / len(with_scores)) if with_scores else 0
+    completed_learning = sum(1 for b in badges if b.get("learning_count", 0) > 0)
+    completed_exam = sum(1 for b in badges if b.get("exam_count", 0) > 0)
+
+    # Calculate average learning score across all badges
+    with_learning_scores = [b for b in badges if b.get("avg_learning_percentage") is not None]
+    avg_learning = (sum(b["avg_learning_percentage"] for b in with_learning_scores)
+                    / len(with_learning_scores)) if with_learning_scores else 0
+
+    # Calculate average exam score across all badges
+    with_exam_scores = [b for b in badges if b.get("best_score_percentage") is not None]
+    avg_exam = (sum(b["best_score_percentage"] for b in with_exam_scores)
+                / len(with_exam_scores)) if with_exam_scores else 0
+
     total_questions = sum(len(b["question_ids"]) for b in badges)
 
-    # Build markdown
+    # Build markdown header with separate learning and exam stats
     dashboard = "### Overview\n"
-    dashboard += f"**Completed:** {completed}/{total} badges | "
-    dashboard += f"**Questions:** {total_questions} | "
-    if with_scores:
-        dashboard += f"**Avg Best Score:** {round(avg_score, 1)}%\n\n"
-    else:
-        dashboard += "**Avg Best Score:** -\n\n"
+    dashboard += f"**Total Badges:** {total} | **Questions:** {total_questions}\n\n"
+    dashboard += f"**Learning:** {completed_learning} completed | Avg: {round(avg_learning, 1)}%\n\n"
+    dashboard += f"**Exam:** {completed_exam} completed | Avg Best: {round(avg_exam, 1)}%\n\n"
 
-    # Badge table
-    dashboard += "| Badge | Qs | Reviews | Best | Last Reviewed |\n"
-    dashboard += "|-------|----:|--------:|-----:|---------------|\n"
+    # Badge table with separate columns for learning and exam
+    dashboard += "| Badge | Qs | Learn | Learn Avg | Exam | Exam Best | Last |\n"
+    dashboard += "|-------|---:|------:|----------:|-----:|----------:|------|\n"
 
     for b in badges:
+        # Initialize fields for backward compatibility
+        learning_count = b.get("learning_count", 0)
+        exam_count = b.get("exam_count", 0)
+        avg_learning_pct = b.get("avg_learning_percentage")
+        best_exam_pct = b.get("best_score_percentage")
+
+        # Truncate badge name if too long
         name = b["name"]
-        if len(name) > 25:
-            name = name[:22] + "..."
+        if len(name) > 20:
+            name = name[:17] + "..."
+
+        # Format columns
         q_count = len(b["question_ids"])
-        reviews = b["review_count"]
-        best = f"{b['best_score_percentage']}%" if b["best_score_percentage"] is not None else "-"
+        learn_count_str = str(learning_count) if learning_count > 0 else "-"
+        learn_avg_str = f"{avg_learning_pct}%" if avg_learning_pct is not None else "-"
+        exam_count_str = str(exam_count) if exam_count > 0 else "-"
+        exam_best_str = f"{best_exam_pct}%" if best_exam_pct is not None else "-"
         last = format_days_ago(b["last_reviewed"]) if b["last_reviewed"] else "-"
 
-        # Status indicator
-        if reviews == 0:
-            status = ""
-        elif b["best_score_percentage"] and b["best_score_percentage"] >= 80:
+        # Status indicator (mastered if both modes >= 80%)
+        status = ""
+        if (avg_learning_pct and avg_learning_pct >= 80 and
+            best_exam_pct and best_exam_pct >= 80):
             status = " *"
-        else:
-            status = ""
 
-        dashboard += f"| {name}{status} | {q_count} | {reviews} | {best} | {last} |\n"
+        dashboard += f"| {name}{status} | {q_count} | {learn_count_str} | {learn_avg_str} | {exam_count_str} | {exam_best_str} | {last} |\n"
 
-    dashboard += "\n_* = Best score 80%+_"
+    dashboard += "\n_* = Both modes scored 80%+_"
     return dashboard
 
 
@@ -567,7 +616,7 @@ def grade_answer(question: str, user_answer: str, learning_material: str) -> dic
         return {"score": 5, "feedback": f"Could not parse grade, defaulting to 5/10. Error: {e}"}
 
 
-def analyze_answer(question: str, user_answer: str, learning_material: str) -> dict:
+def analyze_answer(question: str, user_answer: str, learning_material: str, model: str = None) -> dict:
     """Get structured LLM analysis (no scoring) for human grading."""
     if not user_answer.strip():
         return {
@@ -583,7 +632,7 @@ def analyze_answer(question: str, user_answer: str, learning_material: str) -> d
     )
 
     try:
-        response = prompt_nemotron(prompt, include_reasoning=False)
+        response = prompt_nemotron(prompt, include_reasoning=False, model=model)
         # Try to parse JSON from response
         import re
         # Match JSON object containing the expected fields
@@ -766,6 +815,7 @@ def create_app(data_path: str | None = None):
         "all_questions": [],
         "session_data": {"badges": []},
         "session_path": None,
+        "selected_model": None,  # LLM model selected by user
     }
 
     # Load data if path provided (backwards compatible mode)
@@ -801,6 +851,21 @@ def create_app(data_path: str | None = None):
                     info += f"- **Exam Attempts:** {len(badge['exam_scores'])}\n"
                 return info
         return ""
+
+    def refresh_progress_dashboard():
+        """Reload session data from disk and regenerate dashboard."""
+        nonlocal session_data, session_path
+        current_session_path = app_state["session_path"]
+        if current_session_path and os.path.exists(current_session_path):
+            try:
+                with open(current_session_path, "r", encoding="utf-8") as f:
+                    app_state["session_data"] = json.load(f)
+                # Update the alias for nested functions
+                session_data = app_state["session_data"]
+                return generate_progress_dashboard(app_state["session_data"])
+            except Exception as e:
+                return f"Error loading session: {e}"
+        return "No session file loaded"
 
     def start_badge_session(mode: str, randomize: bool, badge_id: str):
         """Initialize a new study session for a specific badge."""
@@ -878,7 +943,7 @@ def create_app(data_path: str | None = None):
             return session, "No more questions.", "", gr.update(), gr.update()
 
         # Get structured analysis for human grading (both modes)
-        analysis = analyze_answer(q["question"], answer, q["learning_material"])
+        analysis = analyze_answer(q["question"], answer, q["learning_material"], model=app_state["selected_model"])
 
         # Get feedback text based on mode
         if session.mode == "learning":
@@ -905,7 +970,7 @@ def create_app(data_path: str | None = None):
         return (
             session,
             feedback_text,
-            gr.update(visible=False),  # hide submit
+            gr.update(visible=False, value="Submit Answer", interactive=True),  # hide submit and reset state
             gr.update(visible=True),   # show next
         )
 
@@ -1232,9 +1297,13 @@ def create_app(data_path: str | None = None):
 
     # Build UI
     # File loading callback for dynamic file selection
-    def load_selected_file(file_choice: str):
+    def load_selected_file(file_choice: str, model_choice: str):
         """Load a learning materials file and update app state."""
         nonlocal session_data, session_path, all_questions
+
+        # Store the selected model
+        if model_choice:
+            app_state["selected_model"] = model_choice
 
         if not file_choice:
             return (
@@ -1306,10 +1375,20 @@ def create_app(data_path: str | None = None):
                     label="Choose a file from LearningMaterials/",
                     value=None
                 )
+                # Model selection dropdown
+                gr.Markdown("### Select LLM Model")
+                available_models = get_available_models()
+                model_dropdown = gr.Dropdown(
+                    choices=available_models,
+                    label="Choose LLM model from LM Studio",
+                    value=available_models[0] if available_models else None,
+                    info="Model to use for answer analysis and feedback"
+                )
                 load_file_btn = gr.Button("Load File", variant="primary")
             else:
                 gr.Markdown("_No JSON files found in LearningMaterials/ folder._")
                 file_dropdown = gr.Dropdown(choices=[], visible=False)
+                model_dropdown = gr.Dropdown(choices=[], visible=False)
                 load_file_btn = gr.Button("Load File", visible=False)
             file_status = gr.Markdown("")
 
@@ -1319,9 +1398,13 @@ def create_app(data_path: str | None = None):
 
             # Progress Dashboard
             with gr.Accordion("Progress Dashboard", open=True):
-                progress_dashboard = gr.Markdown(
-                    generate_progress_dashboard(session_data) if file_loaded else ""
-                )
+                with gr.Row():
+                    with gr.Column(scale=10):
+                        progress_dashboard = gr.Markdown(
+                            generate_progress_dashboard(session_data) if file_loaded else ""
+                        )
+                    with gr.Column(scale=1, min_width=80):
+                        refresh_dashboard_btn = gr.Button("🔄 Refresh", size="sm", variant="secondary")
 
             badge_dropdown = gr.Dropdown(
                 choices=get_badge_choices(),
@@ -1395,7 +1478,7 @@ def create_app(data_path: str | None = None):
         # File selection -> load file and show badge selector
         load_file_btn.click(
             load_selected_file,
-            inputs=[file_dropdown],
+            inputs=[file_dropdown, model_dropdown],
             outputs=[
                 file_selector_section, badge_selector_section, file_status,
                 badge_dropdown, badge_info, progress_dashboard
@@ -1523,6 +1606,12 @@ def create_app(data_path: str | None = None):
             ]
         )
 
+        # Refresh dashboard button
+        refresh_dashboard_btn.click(
+            refresh_progress_dashboard,
+            outputs=[progress_dashboard]
+        )
+
     return app
 
 
@@ -1532,24 +1621,15 @@ def create_app(data_path: str | None = None):
 
 def main():
     parser = argparse.ArgumentParser(description="AWS Study Tool - Gradio App")
-    parser.add_argument("data_path", nargs='?', default=None,
-                        help="Path to learning materials JSON file (optional - can select in UI)")
     parser.add_argument("--port", type=int, default=7860, help="Port to run on")
     parser.add_argument("--share", action="store_true", help="Create public link")
     parser.add_argument("--server-name", type=str, default=None,
                         help="Server name/IP to bind to (default: auto-detect)")
     args = parser.parse_args()
 
-    if args.data_path and not os.path.exists(args.data_path):
-        print(f"Error: File not found: {args.data_path}")
-        return
+    print("Starting in file selection mode...")
 
-    if args.data_path:
-        print(f"Loading learning materials from: {args.data_path}")
-    else:
-        print("Starting in file selection mode...")
-
-    app = create_app(args.data_path)
+    app = create_app(None)
     server_name = args.server_name or get_gradio_server_name()
     print(f"Starting server on http://localhost:{args.port}")
     print(f"Binding Gradio to: {server_name}:{args.port}")

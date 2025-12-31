@@ -11,8 +11,10 @@ Gradio-based study application with Learning and Exam modes.
 **How to run:**
 ```bash
 source .venv/bin/activate
-python learning.py LearningMaterials/clf-c02.json
+python learning.py
 ```
+
+The application will launch in your browser. Select your learning materials file (e.g., clf-c02.json) from the dropdown menu in the UI.
 
 **Features:**
 - Badge-based organization (questions grouped by Domain, Technology, AWS Service category)
@@ -79,7 +81,7 @@ Session files are stored in `ExamMode/` with naming derived from the input file:
 Questions are organized into badges by topic:
 - **Domain badges**: 1 per domain (Domain 1, Domain 2, etc.)
 - **Technology badges**: Split into 2 parts (~15-16 questions each)
-- **AWS Service badges**: 1 per service category (Analytics, Compute, Security, etc.)
+- **AWS Service badges**: Split into 2 parts (same as Technologies)
 
 Category headers and PDF artifacts are filtered out during question loading.
 
